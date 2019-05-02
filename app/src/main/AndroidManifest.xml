@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="jp.gr.aqua.dropbox.provider">
+
+    <!-- Min/target SDK versions (<uses-sdk>) managed by build.gradle -->
+
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:icon="@drawable/ic_launcher"
+        android:theme="@style/MyAppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!--BEGIN_INCLUDE(provider_manifest)-->
+        <!--
+        Declare the document provider class DropboxProvider to the system.  The MANAGE_DOCUMENTS
+        permission belongs only to the Android system, ensuring this provider will never be used
+        directly by another app.  The provider must grant URI permissions in order to expose the
+        specific documents(s) chosen, while not sharing all of its data by default.  It must be
+        exported to be visible outside the application, and it must include a filter with the intent
+        "android.content.action.DOCUMENTS_PROVIDER" in order to be shown in the system document
+        picker UI.
+        -->
+        <provider
+            android:name=".DropboxProvider"
+            android:authorities="${APPLICATION_ID}.documents"
+            android:grantUriPermissions="true"
+            android:exported="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER"/>
+            </intent-filter>
+        </provider>
+        <!--END_INCLUDE(provider_manifest)-->
+
+
+        <activity
+            android:name="com.dropbox.core.android.AuthActivity"
+            android:configChanges="orientation|keyboard"
+            android:launchMode="singleTask" >
+            <intent-filter>
+
+                <!-- Change this to be db- followed by your app key -->
+                <data android:scheme="db-${DROPBOX_APPID}" />
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.BROWSABLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

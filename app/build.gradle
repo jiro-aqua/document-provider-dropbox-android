@@ -1,0 +1,56 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-android'
+
+android {
+    compileSdkVersion 28
+
+    buildToolsVersion "28.0.3"
+
+    defaultConfig {
+        applicationId project.property("applicationid")
+        minSdkVersion 23
+        targetSdkVersion 28
+
+        versionCode 1
+        versionName "0.01"
+
+        buildConfigField "String", "DROPBOX_APPID", "\"" + project.property("dropboxappid") +"\""
+        buildConfigField "String", "DROPBOX_HEADER", "\"" + project.property("dropboxheader") + "\""
+        manifestPlaceholders = [
+                APPLICATION_ID : project.property("applicationid") ,
+                DROPBOX_APPID : project.property("dropboxappid")
+        ]
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(project.property("signing"))
+            storePassword project.property("storePassword")
+            keyAlias project.property("keyAlias")
+            keyPassword project.property("keyPassword")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+}
+
+dependencies {
+    implementation "com.android.support:support-v4:28.0.0"
+    implementation "com.android.support:support-v13:28.0.0"
+    implementation "com.android.support:cardview-v7:28.0.0"
+    implementation "com.android.support:appcompat-v7:28.0.0"
+
+    implementation 'com.dropbox.core:dropbox-core-sdk:3.0.11'
+    implementation 'com.squareup.okhttp3:okhttp:3.10.0'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation "in.co.ophio:secure-preferences:0.1.3"
+
+}
+repositories {
+    mavenCentral()
+}

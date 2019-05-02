@@ -1,0 +1,12 @@
+<resources>
+    <string name="sample_action">Log in</string>
+    <string name="app_name">SAF for Dropbox</string>
+    <string name="provider_name">Dropbox</string>
+    <string name="intro_message">Welcome to SAF for Dropbox.\nPlease login to Dropbox.</string>
+    <string name="logout_message">You\'re already logged into Dropbox.</string>
+    <string name="log_in">Log in</string>
+    <string name="log_out">Log out</string>
+    <string name="logged_in_info">You are currently logged in, which means the documents in MyCloud are visible to other applications.</string>
+    <string name="logged_out_info">You are currently logged out, so MyCloud is not visible as a document provider.</string>
+    <string name="key_logged_in">logged_in</string>
+</resources>
