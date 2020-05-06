@@ -10,6 +10,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
+import android.util.Log
 import android.webkit.MimeTypeMap
 import com.dropbox.core.DbxException
 import com.dropbox.core.v2.files.FileMetadata
@@ -39,7 +40,7 @@ class DropboxProvider : DocumentsProvider() {
     private val lastMetadata = HashMap<String,Metadata>()
 
     override fun onCreate(): Boolean {
-//        Log.v(TAG, "onCreate")
+        Log.v(TAG, "onCreate")
         context.cacheDir.listFiles().forEach { it.delete() }
         return true
     }
@@ -47,7 +48,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_roots)
     @Throws(FileNotFoundException::class)
     override fun queryRoots(projection: Array<String>?): Cursor {
-//        Log.v(TAG, "queryRoots")
+        Log.v(TAG, "queryRoots" + projection)
 
         // Create a cursor with either the requested fields, or the default projection.  This
         // cursor is returned to the Android system picker UI and used to display all roots from
@@ -96,7 +97,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_recent_documents)
     @Throws(FileNotFoundException::class)
     override fun queryRecentDocuments(rootId: String, projection: Array<String>): Cursor {
-//        Log.v(TAG, "queryRecentDocuments")
+        Log.v(TAG, "queryRecentDocuments")
 
         // This example implementation walks a local file structure to find the most recently
         // modified files.  Other implementations might include making a network call to query a
@@ -154,7 +155,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_search_documents)
     @Throws(FileNotFoundException::class)
     override fun querySearchDocuments(rootId: String, query: String, projection: Array<String>): Cursor {
-//        Log.v(TAG, "querySearchDocuments")
+        Log.v(TAG, "querySearchDocuments")
 
         // Create a cursor with the requested projection, or the default projection.
         val result = MatrixCursor(resolveDocumentProjection(projection))
@@ -205,7 +206,7 @@ class DropboxProvider : DocumentsProvider() {
     @Throws(FileNotFoundException::class)
     override fun openDocumentThumbnail(documentId: String, sizeHint: Point,
                                        signal: CancellationSignal): AssetFileDescriptor {
-//        Log.v(TAG, "openDocumentThumbnail")
+        Log.v(TAG, "openDocumentThumbnail")
 
         synchronized(lock){
             val client = DropboxClientFactory.client(token)
@@ -227,7 +228,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_document)
     @Throws(FileNotFoundException::class)
     override fun queryDocument(documentId: String, projection: Array<String>?): Cursor {
-//        Log.v(TAG, "queryDocument")
+        Log.v(TAG, "queryDocument")
 
         // Create a cursor with the requested projection, or the default projection.
         val result = MatrixCursor(resolveDocumentProjection(projection))
@@ -251,10 +252,10 @@ class DropboxProvider : DocumentsProvider() {
     @Throws(FileNotFoundException::class)
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<String>?,
                                      sortOrder: String): Cursor {
-//        Log.v(TAG, "queryChildDocuments, parentDocumentId: " +
-//                parentDocumentId +
-//                " sortOrder: " +
-//                sortOrder)
+        Log.v(TAG, "queryChildDocuments, parentDocumentId: " +
+                parentDocumentId +
+                " sortOrder: " +
+                sortOrder)
 
         val result = MatrixCursor(resolveDocumentProjection(projection))
 
@@ -281,7 +282,7 @@ class DropboxProvider : DocumentsProvider() {
     @Throws(FileNotFoundException::class)
     override fun openDocument(documentId: String, mode: String,
                               signal: CancellationSignal?): ParcelFileDescriptor {
-//        Log.v(TAG, "openDocument, mode: $mode")
+        Log.v(TAG, "openDocument, mode: $mode")
         // It's OK to do network operations in this method to download the document, as long as you
         // periodically check the CancellationSignal.  If you have an extremely large file to
         // transfer from the network, a better solution may be pipes or sockets
@@ -349,7 +350,11 @@ class DropboxProvider : DocumentsProvider() {
                         return -1  // end of stream
                     }
                 }
-                val newPath = "$documentId/$displayName"
+                val newPath = if (documentId == "/") {
+                    "/$displayName"
+                } else {
+                    "$documentId/$displayName"
+                }
                 client.files().uploadBuilder(newPath)
                         .withMode(WriteMode.OVERWRITE)
                         .uploadAndFinish(emptyInputStream)
@@ -364,7 +369,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(delete_document)
     @Throws(FileNotFoundException::class)
     override fun deleteDocument(documentId: String) {
-//        Log.v(TAG, "deleteDocument")
+        Log.v(TAG, "deleteDocument")
         synchronized(lock){
             val client = DropboxClientFactory.client(token)
             try {
@@ -544,7 +549,7 @@ class DropboxProvider : DocumentsProvider() {
     }
 
     companion object {
-//        private const val TAG = "SAF4Dropbox"
+        private const val TAG = "SAF4Dropbox"
         private const val ROOT_DIRECTORY = "/"
 
         // Use these as the default columns to return information about a root if no specific
