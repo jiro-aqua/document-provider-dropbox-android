@@ -317,9 +317,19 @@ class DropboxProvider : DocumentsProvider() {
                     synchronized(lock){
                         val client = DropboxClientFactory.client(token)
                         try {
-                            client.files().uploadBuilder(documentId)
-                                    .withMode(WriteMode.OVERWRITE)
-                                    .uploadAndFinish(file.inputStream())
+                            val localSize = file.length()
+                            do{
+                                client.files().uploadBuilder(documentId)
+                                        .withMode(WriteMode.OVERWRITE)
+                                        .uploadAndFinish(file.inputStream())
+
+                                val metadata = client.files().getMetadata(documentId)
+                                val serverSize = if ( metadata is FileMetadata ){
+                                    metadata.size
+                                }else{
+                                    throw Exception("Illegal Folder on uploading file")
+                                }
+                            }while(localSize != serverSize)
                         } catch (e: DbxException) {
                             throw e
                         }
