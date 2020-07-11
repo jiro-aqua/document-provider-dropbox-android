@@ -13,10 +13,7 @@ import android.provider.DocumentsProvider
 import android.util.Log
 import android.webkit.MimeTypeMap
 import com.dropbox.core.DbxException
-import com.dropbox.core.v2.files.FileMetadata
-import com.dropbox.core.v2.files.FolderMetadata
-import com.dropbox.core.v2.files.Metadata
-import com.dropbox.core.v2.files.WriteMode
+import com.dropbox.core.v2.files.*
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -94,6 +91,22 @@ class DropboxProvider : DocumentsProvider() {
     }
     // END_INCLUDE(query_roots)
 
+    private fun DbxUserFilesRequests.listFolderAll(path : String) : List<Metadata>
+    {
+        val all = ArrayList<Metadata>()
+        var cursor: String? = null
+        do{
+            val result = if ( cursor == null ){
+                listFolder(path)
+            }else{
+                listFolderContinue(cursor)
+            }
+            all.addAll(result.entries)
+            cursor = result.cursor
+        }while(result.hasMore)
+        return all
+    }
+
     // BEGIN_INCLUDE(query_recent_documents)
     @Throws(FileNotFoundException::class)
     override fun queryRecentDocuments(rootId: String, projection: Array<String>): Cursor {
@@ -128,7 +141,7 @@ class DropboxProvider : DocumentsProvider() {
                     val metadata = pending.removeFirst()
                     if (metadata is FolderMetadata) {
                         // If it's a directory, add all its children to the unprocessed list
-                        client.files().listFolder(metadata.pathDisplay).entries.forEach {
+                        client.files().listFolderAll(metadata.pathDisplay).forEach {
                             pending.add(it)
                         }
                     } else if (metadata is FileMetadata) {
@@ -183,7 +196,7 @@ class DropboxProvider : DocumentsProvider() {
                     val metadata = pending.removeFirst()
                     if (metadata is FolderMetadata) {
                         // If it's a directory, add all its children to the unprocessed list
-                        client.files().listFolder(metadata.pathDisplay).entries.forEach {
+                        client.files().listFolderAll(metadata.pathDisplay).forEach {
                             pending.add(it)
                         }
                     } else if ( metadata is FileMetadata){
@@ -263,7 +276,7 @@ class DropboxProvider : DocumentsProvider() {
             val client = DropboxClientFactory.client(token)
             try {
                 val _parentDocumentId = if ( parentDocumentId == ROOT_DIRECTORY ) "" else parentDocumentId
-                val children = client.files().listFolder(_parentDocumentId).entries
+                val children = client.files().listFolderAll(_parentDocumentId)
                 children.forEach {
                     includeFile(result, it)
                     lastMetadata[it.pathDisplay] = it
