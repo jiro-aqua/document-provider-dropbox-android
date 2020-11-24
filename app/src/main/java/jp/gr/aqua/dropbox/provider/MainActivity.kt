@@ -2,34 +2,38 @@ package jp.gr.aqua.dropbox.provider
 
 import android.os.Bundle
 import android.provider.DocumentsContract
-import android.support.v7.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatActivity
 import com.dropbox.core.android.Auth
-import kotlinx.android.synthetic.main.activity_main.*
+import jp.gr.aqua.dropbox.provider.databinding.ActivityMainBinding
+
 
 class MainActivity : AppCompatActivity() {
 
     private val pref by lazy { Preference(this) }
 
+    private lateinit var binding : ActivityMainBinding
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        button_login.setOnClickListener {
-            if (pref.hasToken()) {
+        binding.buttonLogin.setOnClickListener {
+            if (pref.hasCredential()) {
                 // Log out
-                pref.putToken()
+                pref.putCredential()
 
                 // BEGIN_INCLUDE(notify_change)
                 // Notify the system that the status of our roots has changed.  This will trigger
                 // a call to DropboxProvider.queryRoots() and force a refresh of the system
                 // picker UI.  It's important to call this or stale results may persist.
-                this.contentResolver.notifyChange(DocumentsContract.buildRootsUri(AUTHORITY), null, false)
+                this.contentResolver.notifyChange(DocumentsContract.buildRootsUri(AUTHORITY), null)
                 // END_INCLUDE(notify_change)
 
                 showStatus()
             } else {
                 // Login
-                Auth.startOAuth2Authentication(this, BuildConfig.DROPBOX_APPID)
+                Auth.startOAuth2PKCE(this, BuildConfig.DROPBOX_APPID, DropboxClientFactory.requestConfig, SCOPES);
             }
         }
         showStatus()
@@ -37,15 +41,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val token = Auth.getOAuth2Token()
-        token?.let {
-            pref.putToken(token)
 
+        val credential = Auth.getDbxCredential()
+        credential?.let {
+            pref.putCredential(credential.toString())
             // BEGIN_INCLUDE(notify_change)
             // Notify the system that the status of our roots has changed.  This will trigger
             // a call to DropboxProvider.queryRoots() and force a refresh of the system
             // picker UI.  It's important to call this or stale results may persist.
-            contentResolver.notifyChange(DocumentsContract.buildRootsUri(AUTHORITY), null, false)
+            contentResolver.notifyChange(DocumentsContract.buildRootsUri(AUTHORITY), null)
             // END_INCLUDE(notify_change)
 
             showStatus()
@@ -53,17 +57,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showStatus() {
-        if (pref.hasToken()) {
-            sample_output.setText(R.string.logout_message)
-            button_login.setText(R.string.log_out)
+        if (pref.hasCredential()) {
+            binding.sampleOutput.setText(R.string.logout_message)
+            binding.buttonLogin.setText(R.string.log_out)
         } else {
-            sample_output.setText(R.string.intro_message)
-            button_login.setText(R.string.log_in)
+            binding.sampleOutput.setText(R.string.intro_message)
+            binding.buttonLogin.setText(R.string.log_in)
         }
     }
 
     companion object {
         private const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.documents"
+        private val SCOPES = arrayListOf("files.metadata.write", "files.metadata.read", "files.content.write", "files.content.read", "account_info.read")
     }
 
 }

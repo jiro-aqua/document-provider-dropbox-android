@@ -1,5 +1,6 @@
 package jp.gr.aqua.dropbox.provider
 
+import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -13,7 +14,12 @@ import android.provider.DocumentsProvider
 import android.util.Log
 import android.webkit.MimeTypeMap
 import com.dropbox.core.DbxException
+import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -26,19 +32,22 @@ import java.util.concurrent.CountDownLatch
  */
 class DropboxProvider : DocumentsProvider() {
 
-    private val pref by lazy { Preference(context) }
-
+    private lateinit var pref : Preference
     private val isUserLoggedIn: Boolean
-        get() = token.isNotEmpty()
+        get() = credential.isNotEmpty()
 
-    private val token: String
-        get() = pref.getToken()
+    private val credential: String
+        get() = pref.getCredential()
 
     private val lastMetadata = HashMap<String,Metadata>()
 
+    private lateinit var _context : Context
+
     override fun onCreate(): Boolean {
         Log.v(TAG, "onCreate")
-        context.cacheDir.listFiles().forEach { it.delete() }
+        _context = context!!
+        pref = Preference(_context)
+        _context.cacheDir.listFiles()?.forEach { it.delete() }
         return true
     }
 
@@ -75,7 +84,7 @@ class DropboxProvider : DocumentsProvider() {
                 Root.FLAG_SUPPORTS_SEARCH)
 
         // COLUMN_TITLE is the root title (e.g. what will be displayed to identify your provider).
-        row.add(Root.COLUMN_TITLE, context.getString(R.string.provider_name))
+        row.add(Root.COLUMN_TITLE, _context.getString(R.string.provider_name))
 
         // This document id must be unique within this provider and consistent across time.  The
         // system picker UI may save it and refer to it later.
@@ -120,7 +129,7 @@ class DropboxProvider : DocumentsProvider() {
         val result = MatrixCursor(resolveDocumentProjection(projection))
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val parent = client.files().getMetadata(rootId)
 
@@ -174,7 +183,7 @@ class DropboxProvider : DocumentsProvider() {
         val result = MatrixCursor(resolveDocumentProjection(projection))
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val parent = client.files().getMetadata(rootId)
 
@@ -218,13 +227,13 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(open_document_thumbnail)
     @Throws(FileNotFoundException::class)
     override fun openDocumentThumbnail(documentId: String, sizeHint: Point,
-                                       signal: CancellationSignal): AssetFileDescriptor {
+                                       signal: CancellationSignal?): AssetFileDescriptor {
         Log.v(TAG, "openDocumentThumbnail")
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
-                val file = File(context.cacheDir, UUID.randomUUID().toString())
+                val file = File(_context.cacheDir, UUID.randomUUID().toString())
                 val output = file.outputStream()
                 val thumbnail = client.files().getThumbnail(documentId)
                 thumbnail.inputStream.copyTo(output)
@@ -273,7 +282,7 @@ class DropboxProvider : DocumentsProvider() {
         val result = MatrixCursor(resolveDocumentProjection(projection))
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val _parentDocumentId = if ( parentDocumentId == ROOT_DIRECTORY ) "" else parentDocumentId
                 val children = client.files().listFolderAll(_parentDocumentId)
@@ -301,10 +310,10 @@ class DropboxProvider : DocumentsProvider() {
         // transfer from the network, a better solution may be pipes or sockets
         // (see ParcelFileDescriptor for helper methods).
 
-        val file = File(context.cacheDir, UUID.randomUUID().toString())
+        val file = File(_context.cacheDir, UUID.randomUUID().toString())
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val output = file.outputStream()
                 val download = client.files().download(documentId)
@@ -320,7 +329,7 @@ class DropboxProvider : DocumentsProvider() {
         return if (isWrite) {
             // Attach a close listener if the document is opened in write mode.
             try {
-                val handler = Handler(context.mainLooper)
+                val handler = Handler(_context.mainLooper)
                 ParcelFileDescriptor.open(file, accessMode, handler) {
                     // Update the file with the cloud server.  The client is done writing.
 //                    Log.i(TAG, "A file with id " + documentId + " has been closed!  Time to " +
@@ -328,23 +337,23 @@ class DropboxProvider : DocumentsProvider() {
 //                    Log.i(TAG, file.name)
 
                     synchronized(lock){
-                        val client = DropboxClientFactory.client(token)
-                        try {
-                            val localSize = file.length()
-                            do{
-                                client.files().uploadBuilder(documentId)
-                                        .withMode(WriteMode.OVERWRITE)
-                                        .uploadAndFinish(file.inputStream())
+                        GlobalScope.launch(Dispatchers.IO){
+                            val client = DropboxClientFactory.client(credential)
+                            try {
+                                val localSize = file.length()
+                                GlobalScope.launch {
+                                    do{
+                                        client.files().uploadBuilder(documentId)
+                                                .withMode(WriteMode.OVERWRITE)
+                                                .uploadAndFinish(file.inputStream())
 
-                                val metadata = client.files().getMetadata(documentId)
-                                val serverSize = if ( metadata is FileMetadata ){
-                                    metadata.size
-                                }else{
-                                    throw Exception("Illegal Folder on uploading file")
+                                        val serverSize = getServerSize(client, documentId)
+                                    }while(localSize != serverSize)
+
                                 }
-                            }while(localSize != serverSize)
-                        } catch (e: DbxException) {
-                            throw e
+                            } catch (e: DbxException) {
+                                throw e
+                            }
                         }
                     }
 
@@ -360,13 +369,25 @@ class DropboxProvider : DocumentsProvider() {
     }
     // END_INCLUDE(open_document)
 
+    private suspend fun getServerSize(client : DbxClientV2 , documentId : String ) : Long {
+        return withContext(Dispatchers.IO){
+            val metadata = client.files().getMetadata(documentId)
+            val serverSize = if ( metadata is FileMetadata ){
+                metadata.size
+            }else{
+                throw Exception("Illegal Folder on uploading file")
+            }
+            serverSize
+        }
+    }
+
     // BEGIN_INCLUDE(create_document)
     @Throws(FileNotFoundException::class)
     override fun createDocument(documentId: String, mimeType: String, displayName: String): String {
 //        Log.v(TAG, "createDocument")
 
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val emptyInputStream : InputStream = object : InputStream() {
                     override fun read(): Int {
@@ -394,7 +415,7 @@ class DropboxProvider : DocumentsProvider() {
     override fun deleteDocument(documentId: String) {
         Log.v(TAG, "deleteDocument")
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 client.files().deleteV2(documentId)
             } catch (e: DbxException) {
@@ -414,7 +435,7 @@ class DropboxProvider : DocumentsProvider() {
      */
     @Throws(FileNotFoundException::class)
     private fun includeFile(result: MatrixCursor, path: String) : Metadata? {
-        val client = DropboxClientFactory.client(token)
+        val client = DropboxClientFactory.client(credential)
         try {
             if ( path == ROOT_DIRECTORY ){
                 var flags = 0
@@ -550,7 +571,7 @@ class DropboxProvider : DocumentsProvider() {
 
     private fun freespace(): Long{
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 val usage = client.users().spaceUsage
                 return usage.allocation.individualValue.allocated - usage.used
@@ -562,7 +583,7 @@ class DropboxProvider : DocumentsProvider() {
 
     private fun email(): String{
         synchronized(lock){
-            val client = DropboxClientFactory.client(token)
+            val client = DropboxClientFactory.client(credential)
             try {
                 return client.users().currentAccount.email
             } catch (e: DbxException) {

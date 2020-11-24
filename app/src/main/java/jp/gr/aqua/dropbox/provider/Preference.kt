@@ -1,20 +1,19 @@
 package jp.gr.aqua.dropbox.provider
 
 import android.content.Context
-import android.preference.PreferenceManager
 
 class Preference(context : Context) {
-    private val sp = PreferenceManager.getDefaultSharedPreferences( context )
+    private val sp = context.getSharedPreferences(PREFFILE,Context.MODE_PRIVATE )
 
-    fun hasToken(): Boolean {
+    fun hasCredential(): Boolean {
         val accessToken : String? = sp.getString(PREFKEY, null)
         return accessToken != null
     }
-    fun getToken(): String {
+    fun getCredential(): String {
         val accessToken : String? = sp.getString(PREFKEY, null)
         return accessToken!!
     }
-    fun putToken(token : String = "" ) {
+    fun putCredential(token : String = "" ) {
         sp.edit().apply{
             if ( token.isEmpty() ) {
                 remove(PREFKEY)
@@ -26,6 +25,7 @@ class Preference(context : Context) {
     }
 
     companion object {
-        private val PREFKEY = "dropbox_token"
+        private const val PREFKEY = "dropbox_credential"
+        private const val PREFFILE = "dropbox_pref"
     }
 }

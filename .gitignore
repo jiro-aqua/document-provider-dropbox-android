@@ -59,3 +59,5 @@ fastlane/test_output
 fastlane/readme.md
 
 gradle.properties
+
+release/
