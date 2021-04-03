@@ -273,7 +273,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_child_documents)
     @Throws(FileNotFoundException::class)
     override fun queryChildDocuments(parentDocumentId: String, projection: Array<String>?,
-                                     sortOrder: String): Cursor {
+                                     sortOrder: String?): Cursor {
         Log.v(TAG, "queryChildDocuments, parentDocumentId: " +
                 parentDocumentId +
                 " sortOrder: " +
