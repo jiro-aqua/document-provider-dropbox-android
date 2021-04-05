@@ -17,8 +17,8 @@ import com.dropbox.core.DbxException
 import com.dropbox.core.v2.DbxClientV2
 import com.dropbox.core.v2.files.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileNotFoundException
@@ -54,7 +54,10 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_roots)
     @Throws(FileNotFoundException::class)
     override fun queryRoots(projection: Array<String>?): Cursor {
-        Log.v(TAG, "queryRoots" + projection)
+        Log.v(TAG, "queryRoots")
+        projection?.forEach {
+            Log.v(TAG, it)
+        }
 
         // Create a cursor with either the requested fields, or the default projection.  This
         // cursor is returned to the Android system picker UI and used to display all roots from
@@ -250,7 +253,7 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(query_document)
     @Throws(FileNotFoundException::class)
     override fun queryDocument(documentId: String, projection: Array<String>?): Cursor {
-        Log.v(TAG, "queryDocument")
+        Log.v(TAG, "queryDocument $documentId")
 
         // Create a cursor with the requested projection, or the default projection.
         val result = MatrixCursor(resolveDocumentProjection(projection))
@@ -337,23 +340,28 @@ class DropboxProvider : DocumentsProvider() {
 //                    Log.i(TAG, file.name)
 
                     synchronized(lock){
-                        GlobalScope.launch(Dispatchers.IO){
-                            val client = DropboxClientFactory.client(credential)
-                            try {
-                                val localSize = file.length()
-                                GlobalScope.launch {
-                                    do{
-                                        client.files().uploadBuilder(documentId)
+                        runBlocking {
+                            withContext(Dispatchers.IO) {
+                                val client = DropboxClientFactory.client(credential)
+                                var tryCount = 0
+                                try {
+                                    val localSize = file.length()
+                                    Log.d("===>", "local size = $localSize")
+                                    do {
+                                        val result = client.files().uploadBuilder(documentId)
                                                 .withMode(WriteMode.OVERWRITE)
                                                 .uploadAndFinish(file.inputStream())
+                                        Log.d("===>", "result = ${result}")
 
+                                        delay(100)
                                         val serverSize = getServerSize(client, documentId)
-                                    }while(localSize != serverSize)
-
+                                        Log.d("===>", "serversize = $serverSize")
+                                    } while (localSize != serverSize && tryCount++ < 5)
+                                } catch (e: DbxException) {
+                                    throw e
                                 }
-                            } catch (e: DbxException) {
-                                throw e
                             }
+
                         }
                     }
 
@@ -369,16 +377,14 @@ class DropboxProvider : DocumentsProvider() {
     }
     // END_INCLUDE(open_document)
 
-    private suspend fun getServerSize(client : DbxClientV2 , documentId : String ) : Long {
-        return withContext(Dispatchers.IO){
-            val metadata = client.files().getMetadata(documentId)
-            val serverSize = if ( metadata is FileMetadata ){
-                metadata.size
-            }else{
-                throw Exception("Illegal Folder on uploading file")
-            }
-            serverSize
+    private fun getServerSize(client : DbxClientV2 , documentId : String ) : Long {
+        val metadata = client.files().getMetadata(documentId)
+        val serverSize = if (metadata is FileMetadata) {
+            metadata.size
+        } else {
+            throw Exception("Illegal Folder on uploading file")
         }
+        return serverSize
     }
 
     // BEGIN_INCLUDE(create_document)
@@ -413,17 +419,40 @@ class DropboxProvider : DocumentsProvider() {
     // BEGIN_INCLUDE(delete_document)
     @Throws(FileNotFoundException::class)
     override fun deleteDocument(documentId: String) {
-        Log.v(TAG, "deleteDocument")
+        Log.v(TAG, "deleteDocument $documentId")
         synchronized(lock){
             val client = DropboxClientFactory.client(credential)
             try {
                 client.files().deleteV2(documentId)
             } catch (e: DbxException) {
-                throw e
+                //throw e
+                Log.v(TAG, "deleteDocument Exception")
+                e.printStackTrace()
             }
         }
     }
-    // END_INCLUDE(delete_document)
+    // END_INCLUDE(rename_document)
+    @Throws(FileNotFoundException::class)
+    override fun renameDocument(documentId: String?, displayName: String?): String {
+        Log.v(TAG, "renameDocument")
+        val newDocumentId = File( File(documentId!!).parentFile , displayName!!).path
+        synchronized(lock){
+            val client = DropboxClientFactory.client(credential)
+            try {
+                client.files().deleteV2(newDocumentId)
+            }catch(e:Exception){
+                e.printStackTrace()
+            }
+            try {
+                Log.v(TAG, "renameDocument [$documentId]->[$newDocumentId]")
+                client.files().moveV2(documentId, newDocumentId )
+            } catch (e: DbxException) {
+                throw e
+            }
+        }
+        return newDocumentId
+    }
+    // END_INCLUDE(rename_document)
 
 
     /**
