@@ -320,7 +320,11 @@ class DropboxProvider : DocumentsProvider() {
             try {
                 val output = file.outputStream()
                 val download = client.files().download(documentId)
-                download.inputStream.copyTo(output)
+                output.use{
+                    download.inputStream.use{
+                        it.copyTo(output)
+                    }
+                }
             } catch (e: DbxException) {
                 throw e
             }
@@ -346,14 +350,15 @@ class DropboxProvider : DocumentsProvider() {
                                 var tryCount = 0
                                 try {
                                     val localSize = file.length()
-                                    Log.d("===>", "local size = $localSize")
+                                    Log.d("===>", "local size = $localSize exists=${file.exists()}")
                                     do {
-                                        val result = client.files().uploadBuilder(documentId)
-                                                .withMode(WriteMode.OVERWRITE)
-                                                .uploadAndFinish(file.inputStream())
-                                        Log.d("===>", "result = ${result}")
-
-                                        delay(100)
+                                        file.inputStream().use{
+                                            val result = client.files().uploadBuilder(documentId)
+                                                    .withMode(WriteMode.OVERWRITE)
+                                                    .uploadAndFinish(it)
+                                            Log.d("===>", "result = ${result}")
+                                            delay(100)
+                                        }
                                         val serverSize = getServerSize(client, documentId)
                                         Log.d("===>", "serversize = $serverSize")
                                     } while (localSize != serverSize && tryCount++ < 5)
